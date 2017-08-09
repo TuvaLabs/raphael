@@ -275,6 +275,11 @@ define(["eve"], function(eve) {
                 var bbox = el._getBBox();
                 return rectPath(bbox.x, bbox.y, bbox.width, bbox.height);
             },
+            /* added foreignObject */
+            foreignObject: function (el) {
+                var a = el.attrs;
+                return rectPath(a.x, a.y, a.width, a.height);
+            },
             set : function(el) {
                 var bbox = el._getBBox();
                 return rectPath(bbox.x, bbox.y, bbox.width, bbox.height);
@@ -3404,6 +3409,29 @@ define(["eve"], function(eve) {
     \*/
     paperproto.text = function (x, y, text) {
         var out = R._engine.text(this, x || 0, y || 0, Str(text));
+        this.__set__ && this.__set__.push(out);
+        return out;
+    };
+    /*\
+     * Paper.foreignObject
+     [ method ]
+     **
+     * Draws a html.
+     **
+     > Parameters
+     **
+     - html (string)
+     - x (number) x coordinate position
+     - y (number) y coordinate position
+     - width (number) width of the html
+     - height (number) height of the html
+     - className (string) html body class
+     **
+     > Usage
+     | var t = paper.foreignObject('<p>Hello</p>', 0, 0, 100, 100, 'myClass');
+    \*/
+    paperproto.foreignObject = function (html, x, y, w, h, className) {
+        var out = R._engine.foreignObject(this, html, x || 0, y || 0, w || 0, h || 0, className || null);
         this.__set__ && this.__set__.push(out);
         return out;
     };

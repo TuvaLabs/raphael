@@ -350,6 +350,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	                var bbox = el._getBBox();
 	                return rectPath(bbox.x, bbox.y, bbox.width, bbox.height);
 	            },
+	            /* added foreignObject */
+	            foreignObject: function (el) {
+	                var a = el.attrs;
+	                return rectPath(a.x, a.y, a.width, a.height);
+	            },
 	            set : function(el) {
 	                var bbox = el._getBBox();
 	                return rectPath(bbox.x, bbox.y, bbox.width, bbox.height);
@@ -3479,6 +3484,29 @@ return /******/ (function(modules) { // webpackBootstrap
 	    \*/
 	    paperproto.text = function (x, y, text) {
 	        var out = R._engine.text(this, x || 0, y || 0, Str(text));
+	        this.__set__ && this.__set__.push(out);
+	        return out;
+	    };
+	    /*\
+	     * Paper.foreignObject
+	     [ method ]
+	     **
+	     * Draws a html.
+	     **
+	     > Parameters
+	     **
+	     - html (string)
+	     - x (number) x coordinate position
+	     - y (number) y coordinate position
+	     - width (number) width of the html
+	     - height (number) height of the html
+	     - className (string) html body class
+	     **
+	     > Usage
+	     | var t = paper.foreignObject('<p>Hello</p>', 0, 0, 100, 100, 'myClass');
+	    \*/
+	    paperproto.foreignObject = function (html, x, y, w, h, className) {
+	        var out = R._engine.foreignObject(this, html, x || 0, y || 0, w || 0, h || 0, className || null);
 	        this.__set__ && this.__set__.push(out);
 	        return out;
 	    };
@@ -6750,6 +6778,29 @@ return /******/ (function(modules) { // webpackBootstrap
 	        };
 	        res.type = "text";
 	        setFillAndStroke(res, res.attrs);
+	        return res;
+	    };
+	    /* added foreignObject */
+	    R._engine.foreignObject = function (svg, html, x, y, w, h, className) {
+	        var el = $("foreignObject");
+	        $(el, {x: x, y: y, width: w, height: h});
+	        svg.canvas && svg.canvas.appendChild(el);
+
+	        var res = new Element(el, svg);
+	        res.attrs = {x: x, y: y, width: w, height: h};
+	        res.type = 'foreignObject';
+
+	        var b = document.createElement("body");
+	        b.innerHTML = html;
+	        if( className ) b.className = className;
+
+	        res.node.appendChild(b);
+
+	        // fix the height to match the newly created html
+	        res.node.setAttribute("height", Math.max(b.clientHeight, h));
+	        res.node.setAttribute("width", Math.max(b.clientWidth, w));
+
+
 	        return res;
 	    };
 	    R._engine.setSize = function (width, height) {

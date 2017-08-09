@@ -1260,6 +1260,29 @@ define(["./raphael.core"], function(R) {
         setFillAndStroke(res, res.attrs);
         return res;
     };
+    /* added foreignObject */
+    R._engine.foreignObject = function (svg, html, x, y, w, h, className) {
+        var el = $("foreignObject");
+        $(el, {x: x, y: y, width: w, height: h});
+        svg.canvas && svg.canvas.appendChild(el);
+
+        var res = new Element(el, svg);
+        res.attrs = {x: x, y: y, width: w, height: h};
+        res.type = 'foreignObject';
+
+        var b = document.createElement("body");
+        b.innerHTML = html;
+        if( className ) b.className = className;
+
+        res.node.appendChild(b);
+
+        // fix the height to match the newly created html
+        res.node.setAttribute("height", Math.max(b.clientHeight, h));
+        res.node.setAttribute("width", Math.max(b.clientWidth, w));
+
+
+        return res;
+    };
     R._engine.setSize = function (width, height) {
         this.width = width || this.width;
         this.height = height || this.height;
