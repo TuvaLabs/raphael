@@ -350,6 +350,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	                var bbox = el._getBBox();
 	                return rectPath(bbox.x, bbox.y, bbox.width, bbox.height);
 	            },
+	            /* For g */
+	            g: function (el) {
+	                var bbox = el._getBBox();
+	                return rectPath(bbox.x, bbox.y, bbox.width, bbox.height);
+	            },
 	            /* added foreignObject */
 	            foreignObject: function (el) {
 	                var a = el.attrs;
@@ -3484,6 +3489,12 @@ return /******/ (function(modules) { // webpackBootstrap
 	    \*/
 	    paperproto.text = function (x, y, text) {
 	        var out = R._engine.text(this, x || 0, y || 0, Str(text));
+	        this.__set__ && this.__set__.push(out);
+	        return out;
+	    };
+	    /* For g */
+	    paperproto.g = function () {
+	        var out = R._engine.g(this);
 	        this.__set__ && this.__set__.push(out);
 	        return out;
 	    };
@@ -7203,6 +7214,16 @@ return /******/ (function(modules) { // webpackBootstrap
 	            fill: "#000"
 	        };
 	        res.type = "text";
+	        setFillAndStroke(res, res.attrs);
+	        return res;
+	    };
+	    // Adding g
+	    R._engine.g = function (svg) {
+	        var el = $("g");
+	        svg.canvas && svg.canvas.appendChild(el);
+	        var res = new Element(el, svg);
+	        res.attrs = {};
+	        res.type = "g";
 	        setFillAndStroke(res, res.attrs);
 	        return res;
 	    };
