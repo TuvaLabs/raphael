@@ -1260,6 +1260,16 @@ define(["./raphael.core"], function(R) {
         setFillAndStroke(res, res.attrs);
         return res;
     };
+    // Adding g
+    R._engine.g = function (svg) {
+        var el = $("g");
+        svg.canvas && svg.canvas.appendChild(el);
+        var res = new Element(el, svg);
+        res.attrs = {};
+        res.type = "g";
+        setFillAndStroke(res, res.attrs);
+        return res;
+    };
     /* added foreignObject */
     R._engine.foreignObject = function (svg, html, x, y, w, h, className) {
         var el = $("foreignObject");

@@ -275,6 +275,11 @@ define(["eve"], function(eve) {
                 var bbox = el._getBBox();
                 return rectPath(bbox.x, bbox.y, bbox.width, bbox.height);
             },
+            /* For g */
+            g: function (el) {
+                var bbox = el._getBBox();
+                return rectPath(bbox.x, bbox.y, bbox.width, bbox.height);
+            },
             /* added foreignObject */
             foreignObject: function (el) {
                 var a = el.attrs;
@@ -3409,6 +3414,12 @@ define(["eve"], function(eve) {
     \*/
     paperproto.text = function (x, y, text) {
         var out = R._engine.text(this, x || 0, y || 0, Str(text));
+        this.__set__ && this.__set__.push(out);
+        return out;
+    };
+    /* For g */
+    paperproto.g = function () {
+        var out = R._engine.g(this);
         this.__set__ && this.__set__.push(out);
         return out;
     };
