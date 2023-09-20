@@ -122,7 +122,7 @@ define(["eve"], function(eve) {
         appendChild = "appendChild",
         apply = "apply",
         concat = "concat",
-        supportsTouch = ('ontouchstart' in g.win) || g.win.DocumentTouch && g.doc instanceof DocumentTouch, //taken from Modernizr touch test
+        supportsTouch = ('ontouchstart' in g.win) || (g.win.DocumentTouch && g.doc instanceof DocumentTouch) || window.navigator.maxTouchPoints > 0 || window.navigator.msMaxTouchPoints > 0, //taken from Modernizr touch test
         E = "",
         S = " ",
         Str = String,
