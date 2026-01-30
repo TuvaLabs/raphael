@@ -127,7 +127,7 @@ define(["eve"], function(eve) {
         S = " ",
         Str = String,
         split = "split",
-        events = "click dblclick mousedown mousemove mouseout mouseover mouseup touchstart touchmove touchend touchcancel"[split](S),
+        events = "click dblclick mousedown mousemove mouseout mouseover mouseup touchstart touchmove touchend touchcancel pointerenter pointerleave"[split](S),
         touchMap = {
             mousedown: "touchstart",
             mousemove: "touchmove",
@@ -2715,18 +2715,24 @@ define(["eve"], function(eve) {
             x: e.clientX + scrollX,
             y: e.clientY + scrollY
         };
-    },
-    addEvent = (function () {
+    };
+    // Track when we're inside a Raphael event handler to avoid breaking Chrome 144+ event handling
+    R._inEventHandler = false;
+    var addEvent = (function () {
         if (g.doc.addEventListener) {
             return function (obj, type, fn, element) {
                 var f = function (e) {
+                    R._inEventHandler = true;
                     var pos = getEventPosition(e);
-                    return fn.call(element, e, pos.x, pos.y);
+                    var result = fn.call(element, e, pos.x, pos.y);
+                    R._inEventHandler = false;
+                    return result;
                 };
                 obj.addEventListener(type, f, false);
 
                 if (supportsTouch && touchMap[type]) {
                     var _f = function (e) {
+                        R._inEventHandler = true;
                         var pos = getEventPosition(e),
                             olde = e;
 
@@ -2740,7 +2746,9 @@ define(["eve"], function(eve) {
                             }
                         }
 
-                        return fn.call(element, e, pos.x, pos.y);
+                        var result = fn.call(element, e, pos.x, pos.y);
+                        R._inEventHandler = false;
+                        return result;
                     };
                     obj.addEventListener(touchMap[type], _f, false);
                 }
@@ -2757,6 +2765,7 @@ define(["eve"], function(eve) {
         } else if (g.doc.attachEvent) {
             return function (obj, type, fn, element) {
                 var f = function (e) {
+                    R._inEventHandler = true;
                     e = e || g.win.event;
                     var scrollY = g.doc.documentElement.scrollTop || g.doc.body.scrollTop,
                         scrollX = g.doc.documentElement.scrollLeft || g.doc.body.scrollLeft,
@@ -2764,7 +2773,9 @@ define(["eve"], function(eve) {
                         y = e.clientY + scrollY;
                     e.preventDefault = e.preventDefault || preventDefault;
                     e.stopPropagation = e.stopPropagation || stopPropagation;
-                    return fn.call(element, e, x, y);
+                    var result = fn.call(element, e, x, y);
+                    R._inEventHandler = false;
+                    return result;
                 };
                 obj.attachEvent("on" + type, f);
                 var detacher = function () {
@@ -3159,7 +3170,12 @@ define(["eve"], function(eve) {
      = (object) @Element
     \*/
     elproto.hover = function (f_in, f_out, scope_in, scope_out) {
-        return this.mouseover(f_in, scope_in).mouseout(f_out, scope_out || scope_in);
+        // Use pointerenter/pointerleave or mouseenter/mouseleave for better handling in Chrome 144+
+        // These events don't re-fire when DOM elements are moved (e.g., via toFront())
+        var hasPointerEvents = typeof g.win.PointerEvent !== "undefined";
+        var enterEvent = hasPointerEvents ? "pointerenter" : "mouseenter";
+        var leaveEvent = hasPointerEvents ? "pointerleave" : "mouseleave";
+        return this[enterEvent](f_in, scope_in)[leaveEvent](f_out, scope_out || scope_in);
     };
     /*\
      * Element.unhover
@@ -3172,7 +3188,10 @@ define(["eve"], function(eve) {
      = (object) @Element
     \*/
     elproto.unhover = function (f_in, f_out) {
-        return this.unmouseover(f_in).unmouseout(f_out);
+        var hasPointerEvents = typeof g.win.PointerEvent !== "undefined";
+        var enterEvent = hasPointerEvents ? "unpointerenter" : "unmouseenter";
+        var leaveEvent = hasPointerEvents ? "unpointerleave" : "unmouseleave";
+        return this[enterEvent](f_in)[leaveEvent](f_out);
     };
     var draggable = [];
     /*\
@@ -4919,6 +4938,85 @@ define(["eve"], function(eve) {
             };
         })(method);
     }
+    /*\
+     * Set.hover
+     [ method ]
+     **
+     * Adds hover event handlers to the set, treating it as a single unit.
+     * This prevents continuous hover events when calling toFront() inside callbacks.
+     > Parameters
+     - f_in (function) handler for hover in
+     - f_out (function) handler for hover out
+     - icontext (object) #optional context for hover in handler
+     - ocontext (object) #optional context for hover out handler
+     = (object) @Set
+    \*/
+    setproto.hover = function (f_in, f_out, scope_in, scope_out) {
+        var set = this,
+            isHovered = false,
+            hoverInHandler = function (e, x, y) {
+                if (!isHovered) {
+                    isHovered = true;
+                    f_in.call(scope_in || this, e, x, y);
+                }
+            },
+            hoverOutHandler = function (e, x, y) {
+                // Check if the related target is still within the set
+                var relatedTarget = e.relatedTarget || e.toElement;
+                var stillInSet = false;
+                if (relatedTarget) {
+                    for (var i = 0, ii = set.items.length; i < ii; i++) {
+                        var node = set.items[i].node;
+                        if (node === relatedTarget || (node && node.contains && node.contains(relatedTarget))) {
+                            stillInSet = true;
+                            break;
+                        }
+                    }
+                }
+                if (isHovered && !stillInSet) {
+                    isHovered = false;
+                    f_out.call(scope_out || scope_in || this, e, x, y);
+                }
+            };
+        // Store handlers for unhover
+        this._hoverHandlers = this._hoverHandlers || [];
+        this._hoverHandlers.push({f_in: f_in, f_out: f_out, hoverIn: hoverInHandler, hoverOut: hoverOutHandler});
+        // Use pointerenter/pointerleave or mouseenter/mouseleave
+        var hasPointerEvents = typeof g.win.PointerEvent !== "undefined";
+        var enterEvent = hasPointerEvents ? "pointerenter" : "mouseenter";
+        var leaveEvent = hasPointerEvents ? "pointerleave" : "mouseleave";
+        return this.forEach(function (el) {
+            el[enterEvent](hoverInHandler, scope_in)[leaveEvent](hoverOutHandler, scope_out || scope_in);
+        });
+    };
+    /*\
+     * Set.unhover
+     [ method ]
+     **
+     * Removes hover event handlers from the set.
+     > Parameters
+     - f_in (function) handler for hover in
+     - f_out (function) handler for hover out
+     = (object) @Set
+    \*/
+    setproto.unhover = function (f_in, f_out) {
+        var handlers = this._hoverHandlers || [];
+        var hasPointerEvents = typeof g.win.PointerEvent !== "undefined";
+        var enterEvent = hasPointerEvents ? "unpointerenter" : "unmouseenter";
+        var leaveEvent = hasPointerEvents ? "unpointerleave" : "unmouseleave";
+        for (var i = handlers.length; i--;) {
+            if (handlers[i].f_in === f_in && handlers[i].f_out === f_out) {
+                var hoverIn = handlers[i].hoverIn;
+                var hoverOut = handlers[i].hoverOut;
+                this.forEach(function (el) {
+                    el[enterEvent](hoverIn)[leaveEvent](hoverOut);
+                });
+                handlers.splice(i, 1);
+                break;
+            }
+        }
+        return this;
+    };
     setproto.attr = function (name, value) {
         if (name && R.is(name, array) && R.is(name[0], "object")) {
             for (var j = 0, jj = name.length; j < jj; j++) {

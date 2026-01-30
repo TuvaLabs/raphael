@@ -1139,7 +1139,6 @@ define(["./raphael.core"], function(R) {
         var parentNode = node.parentNode;
         parentNode.insertBefore(node, parentNode.firstChild);
         R._toback(this, this.paper);
-        var svg = this.paper;
         return this;
     };
     /*\
