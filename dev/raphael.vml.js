@@ -679,17 +679,23 @@ define(["./raphael.core"], function(R) {
         return this;
     };
     elproto.toFront = function () {
+        var self = this;
+        self._isBeingMoved = true;
         !this.removed && this.node.parentNode.appendChild(this.node);
         this.paper && this.paper.top != this && R._tofront(this, this.paper);
+        setTimeout(function () { self._isBeingMoved = false; }, 0);
         return this;
     };
     elproto.toBack = function () {
         if (this.removed) {
             return this;
         }
+        var self = this;
         if (this.node.parentNode.firstChild != this.node) {
+            self._isBeingMoved = true;
             this.node.parentNode.insertBefore(this.node, this.node.parentNode.firstChild);
             R._toback(this, this.paper);
+            setTimeout(function () { self._isBeingMoved = false; }, 0);
         }
         return this;
     };
@@ -697,6 +703,8 @@ define(["./raphael.core"], function(R) {
         if (this.removed) {
             return this;
         }
+        var self = this;
+        self._isBeingMoved = true;
         if (element.constructor == R.st.constructor) {
             element = element[element.length - 1];
         }
@@ -706,17 +714,21 @@ define(["./raphael.core"], function(R) {
             element.node.parentNode.appendChild(this.node);
         }
         R._insertafter(this, element, this.paper);
+        setTimeout(function () { self._isBeingMoved = false; }, 0);
         return this;
     };
     elproto.insertBefore = function (element) {
         if (this.removed) {
             return this;
         }
+        var self = this;
+        self._isBeingMoved = true;
         if (element.constructor == R.st.constructor) {
             element = element[0];
         }
         element.node.parentNode.insertBefore(this.node, element.node);
         R._insertbefore(this, element, this.paper);
+        setTimeout(function () { self._isBeingMoved = false; }, 0);
         return this;
     };
     elproto.blur = function (size) {

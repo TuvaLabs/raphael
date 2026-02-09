@@ -3245,12 +3245,37 @@ return /******/ (function(modules) { // webpackBootstrap
 	     = (object) @Element
 	    \*/
 	    elproto.hover = function (f_in, f_out, scope_in, scope_out) {
-	        // Use pointerenter/pointerleave or mouseenter/mouseleave for better handling in Chrome 144+
-	        // These events don't re-fire when DOM elements are moved (e.g., via toFront())
-	        var hasPointerEvents = typeof g.win.PointerEvent !== "undefined";
-	        var enterEvent = hasPointerEvents ? "pointerenter" : "mouseenter";
-	        var leaveEvent = hasPointerEvents ? "pointerleave" : "mouseleave";
-	        return this[enterEvent](f_in, scope_in)[leaveEvent](f_out, scope_out || scope_in);
+	        // When toFront() (or toBack, etc.) is called inside a hover-in handler,
+	        // the DOM node is removed and re-inserted (appendChild). This causes
+	        // the browser to fire a spurious mouseout. Without protection, that
+	        // clears the isHovered flag, so the real mouseout when the user leaves
+	        // the element never calls f_out.
+	        //
+	        // Fix: toFront/toBack set el._isBeingMoved = true around the DOM move
+	        // and clear it asynchronously.  The mouseout handler checks this flag
+	        // and ignores the event when it is set.
+	        var el = this,
+	            isHovered = false;
+	        var hoverInHandler = function (e, x, y) {
+	            if (!isHovered) {
+	                isHovered = true;
+	                f_in.call(scope_in || this, e, x, y);
+	            }
+	        };
+	        var hoverOutHandler = function (e, x, y) {
+	            // Ignore mouseout events fired because toFront/toBack moved the DOM node.
+	            if (el._isBeingMoved) {
+	                return;
+	            }
+	            if (isHovered) {
+	                isHovered = false;
+	                f_out.call(scope_out || scope_in || this, e, x, y);
+	            }
+	        };
+	        // Store wrapper references so unhover can find them
+	        this._hoverHandlers = this._hoverHandlers || [];
+	        this._hoverHandlers.push({f_in: f_in, f_out: f_out, hoverIn: hoverInHandler, hoverOut: hoverOutHandler});
+	        return this.mouseover(hoverInHandler, scope_in).mouseout(hoverOutHandler, scope_out || scope_in);
 	    };
 	    /*\
 	     * Element.unhover
@@ -3263,10 +3288,16 @@ return /******/ (function(modules) { // webpackBootstrap
 	     = (object) @Element
 	    \*/
 	    elproto.unhover = function (f_in, f_out) {
-	        var hasPointerEvents = typeof g.win.PointerEvent !== "undefined";
-	        var enterEvent = hasPointerEvents ? "unpointerenter" : "unmouseenter";
-	        var leaveEvent = hasPointerEvents ? "unpointerleave" : "unmouseleave";
-	        return this[enterEvent](f_in)[leaveEvent](f_out);
+	        var handlers = this._hoverHandlers || [],
+	            l = handlers.length;
+	        while (l--) {
+	            if (handlers[l].f_in === f_in && handlers[l].f_out === f_out) {
+	                this.unmouseover(handlers[l].hoverIn).unmouseout(handlers[l].hoverOut);
+	                handlers.splice(l, 1);
+	                break;
+	            }
+	        }
+	        return this;
 	    };
 	    var draggable = [];
 	    /*\
@@ -5036,19 +5067,23 @@ return /******/ (function(modules) { // webpackBootstrap
 	                }
 	            },
 	            hoverOutHandler = function (e, x, y) {
-	                // Check if the related target is still within the set
+	                // Ignore mouseout caused by toFront/toBack moving a set member
+	                for (var i = 0, ii = set.items.length; i < ii; i++) {
+	                    if (set.items[i]._isBeingMoved) {
+	                        return;
+	                    }
+	                }
+	                // Check if relatedTarget is still within the set
 	                var relatedTarget = e.relatedTarget || e.toElement;
-	                var stillInSet = false;
 	                if (relatedTarget) {
-	                    for (var i = 0, ii = set.items.length; i < ii; i++) {
-	                        var node = set.items[i].node;
+	                    for (var j = 0, jj = set.items.length; j < jj; j++) {
+	                        var node = set.items[j].node;
 	                        if (node === relatedTarget || (node && node.contains && node.contains(relatedTarget))) {
-	                            stillInSet = true;
-	                            break;
+	                            return;
 	                        }
 	                    }
 	                }
-	                if (isHovered && !stillInSet) {
+	                if (isHovered) {
 	                    isHovered = false;
 	                    f_out.call(scope_out || scope_in || this, e, x, y);
 	                }
@@ -5056,12 +5091,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	        // Store handlers for unhover
 	        this._hoverHandlers = this._hoverHandlers || [];
 	        this._hoverHandlers.push({f_in: f_in, f_out: f_out, hoverIn: hoverInHandler, hoverOut: hoverOutHandler});
-	        // Use pointerenter/pointerleave or mouseenter/mouseleave
-	        var hasPointerEvents = typeof g.win.PointerEvent !== "undefined";
-	        var enterEvent = hasPointerEvents ? "pointerenter" : "mouseenter";
-	        var leaveEvent = hasPointerEvents ? "pointerleave" : "mouseleave";
 	        return this.forEach(function (el) {
-	            el[enterEvent](hoverInHandler, scope_in)[leaveEvent](hoverOutHandler, scope_out || scope_in);
+	            el.mouseover(hoverInHandler, scope_in).mouseout(hoverOutHandler, scope_out || scope_in);
 	        });
 	    };
 	    /*\
@@ -5076,15 +5107,12 @@ return /******/ (function(modules) { // webpackBootstrap
 	    \*/
 	    setproto.unhover = function (f_in, f_out) {
 	        var handlers = this._hoverHandlers || [];
-	        var hasPointerEvents = typeof g.win.PointerEvent !== "undefined";
-	        var enterEvent = hasPointerEvents ? "unpointerenter" : "unmouseenter";
-	        var leaveEvent = hasPointerEvents ? "unpointerleave" : "unmouseleave";
 	        for (var i = handlers.length; i--;) {
 	            if (handlers[i].f_in === f_in && handlers[i].f_out === f_out) {
 	                var hoverIn = handlers[i].hoverIn;
 	                var hoverOut = handlers[i].hoverOut;
 	                this.forEach(function (el) {
-	                    el[enterEvent](hoverIn)[leaveEvent](hoverOut);
+	                    el.unmouseover(hoverIn).unmouseout(hoverOut);
 	                });
 	                handlers.splice(i, 1);
 	                break;
@@ -7173,10 +7201,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	        if (this.removed) {
 	            return this;
 	        }
+	        var self = this;
+	        self._isBeingMoved = true;
 	        var node = getRealNode(this.node);
 	        node.parentNode.appendChild(node);
 	        var svg = this.paper;
 	        svg.top != this && R._tofront(this, svg);
+	        setTimeout(function () { self._isBeingMoved = false; }, 0);
 	        return this;
 	    };
 	    /*\
@@ -7190,10 +7221,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	        if (this.removed) {
 	            return this;
 	        }
+	        var self = this;
+	        self._isBeingMoved = true;
 	        var node = getRealNode(this.node);
 	        var parentNode = node.parentNode;
 	        parentNode.insertBefore(node, parentNode.firstChild);
 	        R._toback(this, this.paper);
+	        setTimeout(function () { self._isBeingMoved = false; }, 0);
 	        return this;
 	    };
 	    /*\
@@ -7208,6 +7242,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	            return this;
 	        }
 
+	        var self = this;
+	        self._isBeingMoved = true;
 	        var node = getRealNode(this.node);
 	        var afterNode = getRealNode(element.node || element[element.length - 1].node);
 	        if (afterNode.nextSibling) {
@@ -7216,6 +7252,7 @@ return /******/ (function(modules) { // webpackBootstrap
 	            afterNode.parentNode.appendChild(node);
 	        }
 	        R._insertafter(this, element, this.paper);
+	        setTimeout(function () { self._isBeingMoved = false; }, 0);
 	        return this;
 	    };
 	    /*\
@@ -7230,10 +7267,13 @@ return /******/ (function(modules) { // webpackBootstrap
 	            return this;
 	        }
 
+	        var self = this;
+	        self._isBeingMoved = true;
 	        var node = getRealNode(this.node);
 	        var beforeNode = getRealNode(element.node || element[0].node);
 	        beforeNode.parentNode.insertBefore(node, beforeNode);
 	        R._insertbefore(this, element, this.paper);
+	        setTimeout(function () { self._isBeingMoved = false; }, 0);
 	        return this;
 	    };
 	    elproto.blur = function (size) {
@@ -8196,17 +8236,23 @@ return /******/ (function(modules) { // webpackBootstrap
 	        return this;
 	    };
 	    elproto.toFront = function () {
+	        var self = this;
+	        self._isBeingMoved = true;
 	        !this.removed && this.node.parentNode.appendChild(this.node);
 	        this.paper && this.paper.top != this && R._tofront(this, this.paper);
+	        setTimeout(function () { self._isBeingMoved = false; }, 0);
 	        return this;
 	    };
 	    elproto.toBack = function () {
 	        if (this.removed) {
 	            return this;
 	        }
+	        var self = this;
 	        if (this.node.parentNode.firstChild != this.node) {
+	            self._isBeingMoved = true;
 	            this.node.parentNode.insertBefore(this.node, this.node.parentNode.firstChild);
 	            R._toback(this, this.paper);
+	            setTimeout(function () { self._isBeingMoved = false; }, 0);
 	        }
 	        return this;
 	    };
@@ -8214,6 +8260,8 @@ return /******/ (function(modules) { // webpackBootstrap
 	        if (this.removed) {
 	            return this;
 	        }
+	        var self = this;
+	        self._isBeingMoved = true;
 	        if (element.constructor == R.st.constructor) {
 	            element = element[element.length - 1];
 	        }
@@ -8223,17 +8271,21 @@ return /******/ (function(modules) { // webpackBootstrap
 	            element.node.parentNode.appendChild(this.node);
 	        }
 	        R._insertafter(this, element, this.paper);
+	        setTimeout(function () { self._isBeingMoved = false; }, 0);
 	        return this;
 	    };
 	    elproto.insertBefore = function (element) {
 	        if (this.removed) {
 	            return this;
 	        }
+	        var self = this;
+	        self._isBeingMoved = true;
 	        if (element.constructor == R.st.constructor) {
 	            element = element[0];
 	        }
 	        element.node.parentNode.insertBefore(this.node, element.node);
 	        R._insertbefore(this, element, this.paper);
+	        setTimeout(function () { self._isBeingMoved = false; }, 0);
 	        return this;
 	    };
 	    elproto.blur = function (size) {

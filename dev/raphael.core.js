@@ -3170,12 +3170,37 @@ define(["eve"], function(eve) {
      = (object) @Element
     \*/
     elproto.hover = function (f_in, f_out, scope_in, scope_out) {
-        // Use pointerenter/pointerleave or mouseenter/mouseleave for better handling in Chrome 144+
-        // These events don't re-fire when DOM elements are moved (e.g., via toFront())
-        var hasPointerEvents = typeof g.win.PointerEvent !== "undefined";
-        var enterEvent = hasPointerEvents ? "pointerenter" : "mouseenter";
-        var leaveEvent = hasPointerEvents ? "pointerleave" : "mouseleave";
-        return this[enterEvent](f_in, scope_in)[leaveEvent](f_out, scope_out || scope_in);
+        // When toFront() (or toBack, etc.) is called inside a hover-in handler,
+        // the DOM node is removed and re-inserted (appendChild). This causes
+        // the browser to fire a spurious mouseout. Without protection, that
+        // clears the isHovered flag, so the real mouseout when the user leaves
+        // the element never calls f_out.
+        //
+        // Fix: toFront/toBack set el._isBeingMoved = true around the DOM move
+        // and clear it asynchronously.  The mouseout handler checks this flag
+        // and ignores the event when it is set.
+        var el = this,
+            isHovered = false;
+        var hoverInHandler = function (e, x, y) {
+            if (!isHovered) {
+                isHovered = true;
+                f_in.call(scope_in || this, e, x, y);
+            }
+        };
+        var hoverOutHandler = function (e, x, y) {
+            // Ignore mouseout events fired because toFront/toBack moved the DOM node.
+            if (el._isBeingMoved) {
+                return;
+            }
+            if (isHovered) {
+                isHovered = false;
+                f_out.call(scope_out || scope_in || this, e, x, y);
+            }
+        };
+        // Store wrapper references so unhover can find them
+        this._hoverHandlers = this._hoverHandlers || [];
+        this._hoverHandlers.push({f_in: f_in, f_out: f_out, hoverIn: hoverInHandler, hoverOut: hoverOutHandler});
+        return this.mouseover(hoverInHandler, scope_in).mouseout(hoverOutHandler, scope_out || scope_in);
     };
     /*\
      * Element.unhover
@@ -3188,10 +3213,16 @@ define(["eve"], function(eve) {
      = (object) @Element
     \*/
     elproto.unhover = function (f_in, f_out) {
-        var hasPointerEvents = typeof g.win.PointerEvent !== "undefined";
-        var enterEvent = hasPointerEvents ? "unpointerenter" : "unmouseenter";
-        var leaveEvent = hasPointerEvents ? "unpointerleave" : "unmouseleave";
-        return this[enterEvent](f_in)[leaveEvent](f_out);
+        var handlers = this._hoverHandlers || [],
+            l = handlers.length;
+        while (l--) {
+            if (handlers[l].f_in === f_in && handlers[l].f_out === f_out) {
+                this.unmouseover(handlers[l].hoverIn).unmouseout(handlers[l].hoverOut);
+                handlers.splice(l, 1);
+                break;
+            }
+        }
+        return this;
     };
     var draggable = [];
     /*\
@@ -4961,19 +4992,23 @@ define(["eve"], function(eve) {
                 }
             },
             hoverOutHandler = function (e, x, y) {
-                // Check if the related target is still within the set
+                // Ignore mouseout caused by toFront/toBack moving a set member
+                for (var i = 0, ii = set.items.length; i < ii; i++) {
+                    if (set.items[i]._isBeingMoved) {
+                        return;
+                    }
+                }
+                // Check if relatedTarget is still within the set
                 var relatedTarget = e.relatedTarget || e.toElement;
-                var stillInSet = false;
                 if (relatedTarget) {
-                    for (var i = 0, ii = set.items.length; i < ii; i++) {
-                        var node = set.items[i].node;
+                    for (var j = 0, jj = set.items.length; j < jj; j++) {
+                        var node = set.items[j].node;
                         if (node === relatedTarget || (node && node.contains && node.contains(relatedTarget))) {
-                            stillInSet = true;
-                            break;
+                            return;
                         }
                     }
                 }
-                if (isHovered && !stillInSet) {
+                if (isHovered) {
                     isHovered = false;
                     f_out.call(scope_out || scope_in || this, e, x, y);
                 }
@@ -4981,12 +5016,8 @@ define(["eve"], function(eve) {
         // Store handlers for unhover
         this._hoverHandlers = this._hoverHandlers || [];
         this._hoverHandlers.push({f_in: f_in, f_out: f_out, hoverIn: hoverInHandler, hoverOut: hoverOutHandler});
-        // Use pointerenter/pointerleave or mouseenter/mouseleave
-        var hasPointerEvents = typeof g.win.PointerEvent !== "undefined";
-        var enterEvent = hasPointerEvents ? "pointerenter" : "mouseenter";
-        var leaveEvent = hasPointerEvents ? "pointerleave" : "mouseleave";
         return this.forEach(function (el) {
-            el[enterEvent](hoverInHandler, scope_in)[leaveEvent](hoverOutHandler, scope_out || scope_in);
+            el.mouseover(hoverInHandler, scope_in).mouseout(hoverOutHandler, scope_out || scope_in);
         });
     };
     /*\
@@ -5001,15 +5032,12 @@ define(["eve"], function(eve) {
     \*/
     setproto.unhover = function (f_in, f_out) {
         var handlers = this._hoverHandlers || [];
-        var hasPointerEvents = typeof g.win.PointerEvent !== "undefined";
-        var enterEvent = hasPointerEvents ? "unpointerenter" : "unmouseenter";
-        var leaveEvent = hasPointerEvents ? "unpointerleave" : "unmouseleave";
         for (var i = handlers.length; i--;) {
             if (handlers[i].f_in === f_in && handlers[i].f_out === f_out) {
                 var hoverIn = handlers[i].hoverIn;
                 var hoverOut = handlers[i].hoverOut;
                 this.forEach(function (el) {
-                    el[enterEvent](hoverIn)[leaveEvent](hoverOut);
+                    el.unmouseover(hoverIn).unmouseout(hoverOut);
                 });
                 handlers.splice(i, 1);
                 break;

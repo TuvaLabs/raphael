@@ -1118,10 +1118,13 @@ define(["./raphael.core"], function(R) {
         if (this.removed) {
             return this;
         }
+        var self = this;
+        self._isBeingMoved = true;
         var node = getRealNode(this.node);
         node.parentNode.appendChild(node);
         var svg = this.paper;
         svg.top != this && R._tofront(this, svg);
+        setTimeout(function () { self._isBeingMoved = false; }, 0);
         return this;
     };
     /*\
@@ -1135,10 +1138,13 @@ define(["./raphael.core"], function(R) {
         if (this.removed) {
             return this;
         }
+        var self = this;
+        self._isBeingMoved = true;
         var node = getRealNode(this.node);
         var parentNode = node.parentNode;
         parentNode.insertBefore(node, parentNode.firstChild);
         R._toback(this, this.paper);
+        setTimeout(function () { self._isBeingMoved = false; }, 0);
         return this;
     };
     /*\
@@ -1153,6 +1159,8 @@ define(["./raphael.core"], function(R) {
             return this;
         }
 
+        var self = this;
+        self._isBeingMoved = true;
         var node = getRealNode(this.node);
         var afterNode = getRealNode(element.node || element[element.length - 1].node);
         if (afterNode.nextSibling) {
@@ -1161,6 +1169,7 @@ define(["./raphael.core"], function(R) {
             afterNode.parentNode.appendChild(node);
         }
         R._insertafter(this, element, this.paper);
+        setTimeout(function () { self._isBeingMoved = false; }, 0);
         return this;
     };
     /*\
@@ -1175,10 +1184,13 @@ define(["./raphael.core"], function(R) {
             return this;
         }
 
+        var self = this;
+        self._isBeingMoved = true;
         var node = getRealNode(this.node);
         var beforeNode = getRealNode(element.node || element[0].node);
         beforeNode.parentNode.insertBefore(node, beforeNode);
         R._insertbefore(this, element, this.paper);
+        setTimeout(function () { self._isBeingMoved = false; }, 0);
         return this;
     };
     elproto.blur = function (size) {
