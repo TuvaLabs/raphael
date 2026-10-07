@@ -2871,6 +2871,11 @@ return /******/ (function(modules) { // webpackBootstrap
 	            j = drag.length;
 	        while (j--) {
 	            dragi = drag[j];
+	            // the element was removed mid-drag: remove() nulls el.node, so drop it from the drag
+	            if (dragi.el.removed || !dragi.el.node) {
+	                drag.splice(j, 1);
+	                continue;
+	            }
 	            if (supportsTouch && e.touches) {
 	                var i = e.touches.length,
 	                    touch;
@@ -2891,6 +2896,10 @@ return /******/ (function(modules) { // webpackBootstrap
 	                next = node.nextSibling,
 	                parent = node.parentNode,
 	                display = node.style.display;
+	            // a touch move with no touch matching this drag leaves x, y undefined
+	            if (!isFinite(x) || !isFinite(y)) {
+	                continue;
+	            }
 	            g.win.opera && parent.removeChild(node);
 	            node.style.display = "none";
 	            o = dragi.el.paper.getElementByPoint(x, y);
@@ -2908,6 +2917,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	            dragi;
 	        while (i--) {
 	            dragi = drag[i];
+	            if (dragi.el.removed) {
+	                continue; // removed mid-drag, its handlers are already unbound
+	            }
 	            dragi.el._drag = {};
 	            eve("raphael.drag.end." + dragi.el.id, dragi.end_scope || dragi.start_scope || dragi.move_scope || dragi.el, e);
 	        }
@@ -3721,6 +3733,9 @@ return /******/ (function(modules) { // webpackBootstrap
 	     | paper.getElementByPoint(mouseX, mouseY).attr({stroke: "#f00"});
 	    \*/
 	    paperproto.getElementByPoint = function (x, y) {
+	        if (!isFinite(x) || !isFinite(y)) {
+	            return null; // elementFromPoint() throws on non-finite coordinates
+	        }
 	        var paper = this,
 	            svg = paper.canvas,
 	            target = g.doc.elementFromPoint(x, y);
