@@ -123,6 +123,7 @@ define(["eve"], function(eve) {
         apply = "apply",
         concat = "concat",
         supportsTouch = ('ontouchstart' in g.win) || (g.win.DocumentTouch && g.doc instanceof DocumentTouch) || window.navigator.maxTouchPoints > 0 || window.navigator.msMaxTouchPoints > 0, //taken from Modernizr touch test
+        isMacPlatform = /Mac/.test(g.win.navigator.platform || ""), // Ctrl+click opens the context menu
         E = "",
         S = " ",
         Str = String,
@@ -3269,6 +3270,12 @@ define(["eve"], function(eve) {
     \*/
     elproto.drag = function (onmove, onstart, onend, move_scope, start_scope, end_scope) {
         function start(e) {
+            // Only the primary button drags. A right-click, or a Ctrl+click on a Mac, opens the
+            // context menu, which swallows the mouseup that would end the drag, so the element
+            // would follow the pointer once the menu closes. Touch events have no button.
+            if (e.button > 0 || (e.ctrlKey && isMacPlatform)) {
+                return;
+            }
             (e.originalEvent || e).preventDefault();
             var x = e.clientX,
                 y = e.clientY,
