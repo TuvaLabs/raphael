@@ -2837,8 +2837,10 @@ define(["eve"], function(eve) {
             eve("raphael.drag.move." + dragi.el.id, dragi.move_scope || dragi.el, x - dragi.el._drag.x, y - dragi.el._drag.y, x, y, e);
         }
     },
+    // also ends a touch drag on touchcancel: e.g. a long-press that opens the browser's
+    // image menu cancels the touch, and no touchend follows
     dragUp = function (e) {
-        R.unmousemove(dragMove).unmouseup(dragUp);
+        R.unmousemove(dragMove).unmouseup(dragUp).untouchcancel(dragUp);
         var i = drag.length,
             dragi;
         while (i--) {
@@ -3296,7 +3298,7 @@ define(["eve"], function(eve) {
             }
             this._drag.x = x + scrollX;
             this._drag.y = y + scrollY;
-            !drag.length && R.mousemove(dragMove).mouseup(dragUp);
+            !drag.length && R.mousemove(dragMove).mouseup(dragUp).touchcancel(dragUp);
             drag.push({el: this, move_scope: move_scope, start_scope: start_scope, end_scope: end_scope});
             onstart && eve.on("raphael.drag.start." + this.id, onstart);
             onmove && eve.on("raphael.drag.move." + this.id, onmove);
@@ -3332,7 +3334,7 @@ define(["eve"], function(eve) {
             draggable.splice(i, 1);
             eve.unbind("raphael.drag.*." + this.id);
         }
-        !draggable.length && R.unmousemove(dragMove).unmouseup(dragUp);
+        !draggable.length && R.unmousemove(dragMove).unmouseup(dragUp).untouchcancel(dragUp);
         drag = [];
     };
     /*\
